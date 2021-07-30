@@ -1,5 +1,5 @@
+import datetime
 import os.path
-from pprint import pprint
 from random import randint
 
 import openpyxl
@@ -45,6 +45,25 @@ class Xls:
                 return row, col
         return sheet.max_row, col
 
+    def _find_row_or_throw_exception(self, sheet: Worksheet, col: int = 2, value: str = '') -> int:
+        for row in range(1, sheet.max_row):
+            if sheet.cell(row, col).value == value:
+                return row
+        raise Exception(f"Cell with value '{value}' doesn't exist in sheet {sheet.title} in column #{col}")
+
+    def _count_of_occurences(self, sheet_name: str, start_row: int = 1, col: int = 1, value: str = '') -> int:
+        count = 0
+        try:
+            sheet = openpyxl.open(self.__file)[sheet_name]
+        except:
+            raise Exception(f"Worksheet with name '{sheet_name}' doesn't exist")
+        for row in range(start_row, sheet.max_row):
+            if sheet.cell(row, col).value == value:
+                count += 1
+            else:
+                return count
+        raise Exception(f"Cell with value '{value}' doesn't exist in sheet '{sheet_name}' in column #{col}")
+
     @property
     def color(self) -> str:
         return self.__cell.fill.fgColor.rgb
@@ -61,15 +80,31 @@ class Xls:
             self.__rows.append(next(rows))
         return [[i.value for i in self.__rows[j]] for j in range(len(self.__rows))]
 
-    def product_category(self, value):
-        """
-        select 1lvl category C1 from :categories: sheet
-        select 2lvl category C2 from :categories2: sheet (from list of pairs C1-C2 in sheet)
-        select 3lvl category C3 from :categories3: sheet (from list of pairs C2-C3 in sheet) (try if exists)
-        select 4lvl category C4 from :categories4: sheet (from list of pairs C3-C4 in sheet) (try if exists)
-        :param value:
-        :return:
-        """
+    def product_category(self, vals: list):
+        valid_product_group = []
+        sheets = ('categories_1', 'categories_2', 'categories_3', 'categories_4')
+        sheet = openpyxl.open(self.__file)['categories']
+        try:
+            row = self._find_row_or_throw_exception(sheet, col=1, value=vals[0])
+            valid_product_group.append(sheet.cell(row, 1).value)
+        except:
+            row = randint(1, sheet.max_row + 1)
+            valid_product_group.append(sheet.cell(row, 1).value)
+        vals = vals[1:]
+        for i in range(len(sheets)+1):
+            sheet = openpyxl.open(self.__file)[sheets[i]]
+            try:
+                row = self._find_row_or_throw_exception(sheet, value=vals[i])
+                valid_product_group.append(sheet.cell(row, 2).value)
+            except:
+                try:
+                    f = self._find_row_or_throw_exception(sheet, col=1, value=valid_product_group[-1])
+                    c = self._count_of_occurences(sheet, f, value=valid_product_group[-1])
+                    row = randint(f, f + c)
+                    valid_product_group.append(sheet.cell(row, 2).value)
+                except:
+                    return valid_product_group
+        return valid_product_group
 
     def dropdown(self, category, next_category, col: int = 1, rowx: int = 1, value: str = None):
         sheet = openpyxl.open(self.__file)['catalogs']
@@ -83,18 +118,41 @@ class Xls:
                 rowx = randint(start, end)
         return sheet.cell(rowx, col)
 
-    def input(self, value):
-        pass
+
+class Milk:
+    def __init__(self):
+        self._table = Xls(path, name, required=['A1', 'B2'])
+
+    def _set_product_category(self, cells: list):
+        product_category = self._table.product_category(['молоко и молочные товары'])
+        sheet = self._table.sheet
+        for i in range(len(product_category)):
+            sheet.cell(cells[i]).value = product_category[i]
+
+    def _set_value(self, value, _cell):
+        self._table.sheet.cell(_cell).value = value
+
+    def _set_random_value_from_list(self, values, _cell):
+        self._table.sheet.cell(_cell).value = values[randint(0, len(values))]
+
+    def table(self):
+        now = datetime.datetime.today().strftime('%d %b %Y %X')
+        product = f'Тест молоко at {now}'
+        milk._set_product_category(cells=['E5', 'F5', 'G5', 'H5', 'I5'])
+        milk._set_value(product, "C5")
 
 
 def test_open():
     file = Xls(path, name)
     sheet = file.sheet
-    #return sheet.cell('E5').value
-    #return sheet.row(5)
-    #todo написать функции для ввода в нужную ячейку а также алгоритмы для базовы случаев- общий случай, молочка, алко и товары животного происхождения
-    return file.dropdown(categories[4], categories[5], value='Продукция низкого риска').value
+    # return sheet.cell('E5').value
+    # return sheet.row(5)
+    # todo написать функции для ввода в нужную ячейку а также алгоритмы для базовы случаев- общий случай, молочка, алко и товары животного происхождения
+    # return file.dropdown(categories[4], categories[5], value='Продукция низкого риска').value
+    return file.product_category(['молоко и молочные товары', 'молоко'])
 
 
 if __name__ == '__main__':
-    pprint(test_open())
+    milk = Milk()
+    milk.table()
+
